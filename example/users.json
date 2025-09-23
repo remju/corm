@@ -1,0 +1,16 @@
+{
+    "1": {
+        "login": "bob",
+        "password": "verysecurepassword",
+        "age": 22,
+        "height": 69.1,
+        "married": false
+    },
+    "2": {
+        "login": "alice",
+        "password": "strongpassword",
+        "age": 23,
+        "height": 420.2,
+        "married": true
+    }
+}

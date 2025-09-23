@@ -1,0 +1,9 @@
+example/corm_setup
+example/example
+example/corm_generated.c
+example/corm_generated.h
+main
+*.o
+*.a
+*.so
+.vscode
