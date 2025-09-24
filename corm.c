@@ -36,6 +36,7 @@ char* read_file(FILE *file, size_t *file_size)
     if (*file_size < 0) return NULL;
     if (fseek(file, 0, SEEK_SET) < 0) return NULL;
     
+    (*file_size)++; // Extra null byte
     char *file_content = calloc(*file_size, 1);
     if(file_content == NULL) return NULL;
 
@@ -127,17 +128,9 @@ int setup_reader(ParsedStruct *s, FILE* f_header, FILE* f_source)
 {
     LOG(INFO, "Generating reader function for struct: %s", s->name);
 
-    char fn_sign[256];
-    sprintf(fn_sign, "int read_%s(Jacon_content *db, %s *%s, const char *%s_key)", s->name, s->name, s->name, s->name);
-    fwrite(fn_sign, 1, strlen(fn_sign), f_header);
-    fwrite(";\n\n", 1, 3, f_header);
-    
-    fwrite(fn_sign, 1, strlen(fn_sign), f_source);
-    fwrite("\n{\n", 1, 3, f_source);
-
-    char fn_body[256];
-    sprintf(fn_body, "    char key[128];\n");
-    fwrite(fn_body, 1, strlen(fn_body), f_source);
+    fprintf(f_header, "void read_%s(Jacon_content *db, %s *%s, const char *%s_key);\n\n", s->name, s->name, s->name, s->name);
+    fprintf(f_source, "void read_%s(Jacon_content *db, %s *%s, const char *%s_key)\n{\n", s->name, s->name, s->name, s->name);
+    fprintf(f_source, "    char key[128];\n");
 
     for (size_t i = 0; i < s->field_count; i++)
     {
@@ -146,59 +139,33 @@ int setup_reader(ParsedStruct *s, FILE* f_header, FILE* f_source)
 
         LOG(INFO, "    adding code for field: %-10s of type: %d", field_name, field_type);
         
-        sprintf(fn_body, "    sprintf(key, \"%%s.%s\", User_key);\n", field_name);
-        fwrite(fn_body, 1, strlen(fn_body), f_source);
+        // TODO: Introduce a tmp string making method to avoid using the next line for every fields
+        fprintf(f_source, "    sprintf(key, \"%%s.%s\", User_key);\n", field_name);
         if (field_type & TYPE_CHAR && field_type & TYPE_POINTER)
-        { // string
-            sprintf(fn_body, "    char *%s;\n", field_name);
-            fwrite(fn_body, 1, strlen(fn_body), f_source);
-
-            sprintf(fn_body, "    Jacon_get_string_by_name(db, key, &%s);\n", field_name);
-            fwrite(fn_body, 1, strlen(fn_body), f_source);
+        {
+            fprintf(f_source, "    Jacon_get_string_by_name(db, key, &%s->%s);\n", s->name, field_name);
         }
         else if (field_type & TYPE_INT)
         {
-            sprintf(fn_body, "    int %s;\n", field_name);
-            fwrite(fn_body, 1, strlen(fn_body), f_source);
-
-            sprintf(fn_body, "    Jacon_get_int_by_name(db, key, &%s);\n", field_name);
-            fwrite(fn_body, 1, strlen(fn_body), f_source);
+            fprintf(f_source, "    Jacon_get_int_by_name(db, key, &%s->%s);\n", s->name, field_name);
         }
         else if (field_type & TYPE_FLOAT)
         {
-            sprintf(fn_body, "    float %s;\n", field_name);
-            fwrite(fn_body, 1, strlen(fn_body), f_source);
-
-            sprintf(fn_body, "    Jacon_get_float_by_name(db, key, &%s);\n", field_name);
-            fwrite(fn_body, 1, strlen(fn_body), f_source);
+            fprintf(f_source, "    Jacon_get_float_by_name(db, key, &%s->%s);\n", s->name, field_name);
         }
         else if (field_type & TYPE_DOUBLE)
         {
-            sprintf(fn_body, "    double %s;\n", field_name);
-            fwrite(fn_body, 1, strlen(fn_body), f_source);
-
-            sprintf(fn_body, "    Jacon_get_double_by_name(db, key, &%s);\n", field_name);
-            fwrite(fn_body, 1, strlen(fn_body), f_source);
+            fprintf(f_source, "    Jacon_get_double_by_name(db, key, &%s->%s);\n", s->name, field_name);
         }
         else if (field_type & TYPE_BOOL)
         {
-            sprintf(fn_body, "    bool %s;\n", field_name);
-            fwrite(fn_body, 1, strlen(fn_body), f_source);
-
-            sprintf(fn_body, "    Jacon_get_bool_by_name(db, key, &%s);\n", field_name);
-            fwrite(fn_body, 1, strlen(fn_body), f_source);
+            fprintf(f_source, "    Jacon_get_bool_by_name(db, key, &%s->%s);\n", s->name, field_name);
         }
-        sprintf(fn_body, "    User->%s = %s;\n", field_name, field_name);
-        fwrite(fn_body, 1, strlen(fn_body), f_source);
     }
 
-    sprintf(fn_body, "    return 0;\n");
-    fwrite(fn_body, 1, strlen(fn_body), f_source);
-
-    fwrite("}\n\n", 1, 3, f_source);
+    fprintf(f_source, "}\n\n");
 
     LOG(INFO, "Reader function done for struct: %s", s->name);
-
     return 0;
 }
 
@@ -206,15 +173,8 @@ int setup_free(ParsedStruct *s, FILE* f_header, FILE* f_source)
 {
     LOG(INFO, "Generating free function for struct: %s", s->name);
 
-    char fn_sign[256];
-    sprintf(fn_sign, "int free_%s(%s *%s)", s->name, s->name, s->name);
-    fwrite(fn_sign, 1, strlen(fn_sign), f_header);
-    fwrite(";\n\n", 1, 3, f_header);
-    
-    fwrite(fn_sign, 1, strlen(fn_sign), f_source);
-    fwrite("\n{\n", 1, 3, f_source);
-    
-    char fn_body[256];
+    fprintf(f_header, "void free_%s(%s *%s);\n\n", s->name, s->name, s->name);
+    fprintf(f_source, "void free_%s(%s *%s)\n{\n", s->name, s->name, s->name);
 
     for (size_t i = 0; i < s->field_count; i++)
     {
@@ -223,15 +183,11 @@ int setup_free(ParsedStruct *s, FILE* f_header, FILE* f_source)
 
         if (field_type & TYPE_POINTER)
         {
-            sprintf(fn_body, "    free(%s->%s);\n", s->name, field_name);
-            fwrite(fn_body, 1, strlen(fn_body), f_source);
+            fprintf(f_source, "    free(%s->%s);\n", s->name, field_name);
         }
     }
 
-    sprintf(fn_body, "    return 0;\n");
-    fwrite(fn_body, 1, strlen(fn_body), f_source);
-
-    fwrite("}\n\n", 1, 3, f_source);
+    fprintf(f_source, "}\n\n");
 
     LOG(INFO, "Free function done for struct: %s", s->name);
 }
@@ -253,31 +209,21 @@ int corm_setup(const char *input_path)
     ParsedStruct s = {0};
     parse_struct(&s, file_content, file_size);
 
-    // create file corm_generated.h, .c
-    // add struct and its funcs
-
     FILE* f_header = fopen("example/corm_generated.h", "wb");
     if (!f_header) return 1;
     FILE* f_source = fopen("example/corm_generated.c", "wb");
     if (!f_source) return 1;
 
-    char *header_start = "#ifndef CORM_GENERATED_H\n#define CORM_GENERATED_H\n\n";
-    char *header_end = "#endif // CORM_GENERATED_H";
-    fwrite(header_start, 1, strlen(header_start), f_header);
+    fprintf(f_header, "#ifndef CORM_GENERATED_H\n#define CORM_GENERATED_H\n\n");
+    fprintf(f_header, "#include <stdbool.h>\n#include \"../Jacon/jacon.h\"\n\n");
+    fprintf(f_header, "%s\n\n", file_content);
+    fprintf(f_source, "#include \"corm_generated.h\"\n#include <stdio.h>\n#include <stdlib.h>\n\n");
 
-    char *includes = "#include <stdbool.h>\n#include \"../Jacon/jacon.h\"\n\n";
-    fwrite(includes, 1, strlen(includes), f_header);
-
-    fwrite(file_content, 1, file_size, f_header);
-    fwrite("\n\n", 1, 2, f_header);
-    
-    includes = "#include \"corm_generated.h\"\n#include <stdio.h>\n#include <stdlib.h>\n\n";
-    fwrite(includes, 1, strlen(includes), f_source);
-    
     setup_reader(&s, f_header, f_source);
     setup_free(&s, f_header, f_source);
+    
+    fprintf(f_header, "#endif // CORM_GENERATED_H");
 
-    fwrite(header_end, 1, strlen(header_end), f_header);
     fclose(f_header);
     fclose(f_source);
 
