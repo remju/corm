@@ -1,5 +1,4 @@
 #include "corm.h"
-#define STB__clex_discard_preprocessor
 #define STB_C_LEXER_IMPLEMENTATION
 #include "stb_c_lexer.h"
 #include <stdio.h>
