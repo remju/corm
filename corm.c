@@ -36,7 +36,7 @@ char* read_file(FILE *file, size_t *file_size)
     if (fseek(file, 0, SEEK_SET) < 0) return NULL;
     
     (*file_size)++; // Extra null byte
-    char *file_content = calloc(*file_size, 1);
+    char *file_content = calloc(1, *file_size);
     if(file_content == NULL) return NULL;
 
     fread(file_content, *file_size, 1, file);
@@ -139,7 +139,7 @@ int setup_read(ParsedStruct *s, FILE* f_header, FILE* f_source)
         char *field_name = s->fields[i]->name;
         int field_type = s->fields[i]->type;       
         // TODO: Introduce a tmp string making method to avoid using the next line for every fields
-        fprintf(f_source, "    sprintf(key, \"%%s.%s\", User_key);\n", field_name);
+        fprintf(f_source, "    sprintf(key, \"%%s.%s\", %s_key);\n", field_name, s->name);
         if (field_type & TYPE_CHAR && field_type & TYPE_POINTER)
         {
             fprintf(f_source, "    Jacon_get_string_by_name(db, key, &%s->%s);\n", var_name, field_name);
@@ -240,8 +240,29 @@ int setup_update(ParsedStruct *s, FILE* f_header, FILE* f_source)
     // We do not need to delete the keys from the map as they will be overwritten
     // Introduce another method to only remove node from root's childs and put another at its location
     // This skips useless steps of removing from map - better perfs
-    fprintf(f_source, "    delete_User(db, %s_key);\n", s->name);
-    fprintf(f_source, "    create_User(db, %s, %s_key);\n", var_name, s->name);
+
+    // fprintf(f_source, "    %s old = {0};\n", s->name);
+    // fprintf(f_source, "    read_%s(db, &old, %s_key);\n", s->name, s->name);
+    // for (size_t i = 0; i < s->field_count; i++)
+    // {
+    //     char *field_name = s->fields[i]->name;
+    //     int field_type = s->fields[i]->type;       
+    //     if (field_type & TYPE_CHAR && field_type & TYPE_POINTER)
+    //     {
+    //         fprintf(f_source, "    if (%s->%s && strcmp(old.%s, %s->%s) != 0)\n", var_name, field_name, field_name, var_name, field_name);
+    //         fprintf(f_source, "    {\n");
+    //         fprintf(f_source, "        free(old.%s);\n", field_name);
+    //         fprintf(f_source, "        old.%s = strdup(%s->%s);\n", field_name, var_name, field_name);
+    //         fprintf(f_source, "    }\n");
+    //     }
+    //     else
+    //     {
+    //         fprintf(f_source, "    if (old.%s != %s->%s)\n", field_name, var_name, field_name);
+    //         fprintf(f_source, "        old.%s = %s->%s;\n", field_name, var_name, field_name);
+    //     }
+    // }
+    fprintf(f_source, "    delete_%s(db, %s_key);\n", s->name, s->name);
+    fprintf(f_source, "    create_%s(db, %s, %s_key);\n", s->name, var_name, s->name);
     
     fprintf(f_source, "}\n\n");
     return 0;
@@ -260,7 +281,7 @@ int setup_delete(ParsedStruct *s, FILE* f_header, FILE* f_source)
         char *field_name = s->fields[i]->name;
         // TODO: Introduce a tmp string making method to avoid using the next line for every fields
         fprintf(f_source, "    sprintf(key, \"%%s.%s\", %s_key);\n", field_name, s->name);
-        fprintf(f_source, "    Jacon_hm_remove(&db->entries, key);\n");
+        fprintf(f_source, "    Jacon_free_node(Jacon_hm_remove(&db->entries, key));\n");
     }
 
     // TODO: Remove node from root's childs
