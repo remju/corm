@@ -14,4 +14,4 @@ example: example/corm_setup.c
 
 clean:
 	rm -f corm main
-	rm -f example/corm_setup example example/corm_generated.c example/corm_generated.h
+	rm -f example/corm_setup example/example example/corm_generated.c example/corm_generated.h
