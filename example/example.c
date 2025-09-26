@@ -1,4 +1,4 @@
-#include "corm_generated.h"
+#include "corm_user.h"
 #include "../Jacon/jacon.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,12 +23,11 @@ int main(void)
 
     // Read one user
     {
-        User user = {0};
+        User first_user = {0};
         char *user_id = "1";
-        read_User(&json_db, &user, user_id);
-        printf("user: %s\n\tlogin: %s\n\tpassword: %s\n\tage: %d\n\theight: %f\n\tmarried: %s\n",
-            user_id, user.login, user.password, user.age, user.height, str_bool(user.married));
-        free_User(&user);
+        read_user(&json_db, &first_user, user_id);
+        print_user(first_user);
+        free_user(&first_user);
     }
 
     // Create a new user
@@ -40,28 +39,30 @@ int main(void)
             .height = 86.4,
             .married = false
         };
-        create_User(&json_db, &new_user, "3");
+        create_user(&json_db, &new_user, "3");
     }
 
     // Update a user
     {
         User updated_user = {0};
         char *user_id = "2";
-        read_User(&json_db, &updated_user, user_id);
+        read_user(&json_db, &updated_user, user_id);
         free(updated_user.password);
         updated_user.password = "updatedpassword"; // Memory leak if no free before replacing
-        update_User(&json_db, &updated_user, user_id);
+        update_user(&json_db, &updated_user, user_id);
         free(updated_user.login);
 
-        User user = {0};
-        read_User(&json_db, &user, user_id);
-        printf("user: %s\n\tlogin: %s\n\tpassword: %s\n\tage: %d\n\theight: %f\n\tmarried: %s\n",
-            user_id, user.login, user.password, user.age, user.height, str_bool(user.married));
-        free_User(&user);
+        User second_user = {0};
+        read_user(&json_db, &second_user, user_id);
+        print_user(second_user);
+        free_user(&second_user);
     }
     
     // Delete a user
-    delete_User(&json_db, "1");
+    delete_user(&json_db, "1");
+
+    // Fast way to look at json without touching db file
+    // puts(Jacon_serialize(json_db.root));
     
     // Save the db to json file to keep modifications
     // save_db(DB_PATH, &json_db);

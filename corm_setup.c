@@ -1,23 +1,14 @@
-#include "corm.h"
+#include "corm_setup.h"
+#define STB__clex_discard_preprocessor
 #define STB_C_LEXER_IMPLEMENTATION
 #include "stb_c_lexer.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
+#include <stdarg.h>
 
 #define LOG(lvl, fmt, ...) (printf("[%s] " fmt "\n", #lvl, ##__VA_ARGS__))
-
-typedef struct {
-    int type;
-    char *name;
-} Field;
-
-typedef struct {
-    char *name;
-    Field **fields;
-    size_t field_count;
-    size_t field_capacity;
-} ParsedStruct;
 
 #define TYPE_CONST      0x01
 #define TYPE_UNSIGNED   0x02
@@ -27,6 +18,20 @@ typedef struct {
 #define TYPE_DOUBLE     0x20
 #define TYPE_BOOL       0x40
 #define TYPE_POINTER    0x80
+
+typedef struct {
+    int type;
+    char *name;
+} Field;
+
+typedef struct {
+    char *name;             // Struct name with 1st char upper
+    size_t name_len;        // Struct name with all chars lower, used for variable names
+    char *lower_name;       // Name length
+    Field **fields;
+    size_t field_count;
+    size_t field_capacity;
+} ParsedStruct;
 
 char* read_file(FILE *file, size_t *file_size)
 {
@@ -41,6 +46,16 @@ char* read_file(FILE *file, size_t *file_size)
 
     fread(file_content, *file_size, 1, file);
     return file_content;
+}
+
+const char* tmp_str(const char *fmt, ...)
+{
+    static char tmp_str_buf[TMP_STR_SIZE];
+    va_list args;
+    va_start(args, fmt);
+    vsprintf(tmp_str_buf, fmt, args);
+    va_end(args);
+    return tmp_str_buf;
 }
 
 int parse_type(const char *type)
@@ -120,6 +135,15 @@ int parse_struct(ParsedStruct *s, const char *file_content, size_t file_size)
         }
     }
 
+    // Small utility to make code clean later
+    s->name[0] = toupper(s->name[0]);           // Enforce first char to upper
+    s->name_len = strlen(s->name);              
+    s->lower_name = calloc(1, s->name_len);
+    for (size_t i = 0; i < s->name_len; i++)    // Keep name as lower chars
+    {
+        s->lower_name[i] = tolower(s->name[i]);
+    }
+
     return 0;
 }
 
@@ -127,13 +151,10 @@ int setup_create_data_node(ParsedStruct *s, FILE *f_source)
 {
     LOG(INFO, "Generating create data node function for struct: %s", s->name);
 
-    char var_name[64];
-    sprintf(var_name, "var_%s", s->name);
-
-    fprintf(f_source, "Jacon_Node* create_%s_node(%s *%s, const char *%s_key)\n{\n", s->name, s->name, var_name, s->name);
+    fprintf(f_source, "Jacon_Node* create_%s_node(%s *%s, const char *key)\n{\n", s->lower_name, s->name, s->lower_name);
     
     fprintf(f_source, "    Jacon_Node *node = calloc(1, sizeof(Jacon_Node));\n");
-    fprintf(f_source, "    node->name = strdup(%s_key);\n", s->name);
+    fprintf(f_source, "    node->name = strdup(key);\n");
     fprintf(f_source, "    node->type = JACON_VALUE_OBJECT;\n");
     for (size_t i = 0; i < s->field_count; i++)
     {
@@ -144,27 +165,27 @@ int setup_create_data_node(ParsedStruct *s, FILE *f_source)
         if (field_type & TYPE_CHAR && field_type & TYPE_POINTER)
         {
             fprintf(f_source, "    %s->type = JACON_VALUE_STRING;\n", field_name);
-            fprintf(f_source, "    %s->value.string_val = strdup(%s->%s);\n", field_name, var_name, field_name);
+            fprintf(f_source, "    %s->value.string_val = strdup(%s->%s);\n", field_name, s->lower_name, field_name);
         }
         else if (field_type & TYPE_INT)
         {
             fprintf(f_source, "    %s->type = JACON_VALUE_INT;\n", field_name);
-            fprintf(f_source, "    %s->value.int_val = %s->%s;\n", field_name, var_name, field_name);
+            fprintf(f_source, "    %s->value.int_val = %s->%s;\n", field_name, s->lower_name, field_name);
         }
         else if (field_type & TYPE_FLOAT)
         {
             fprintf(f_source, "    %s->type = JACON_VALUE_FLOAT;\n", field_name);
-            fprintf(f_source, "    %s->value.float_val = %s->%s;\n", field_name, var_name, field_name);
+            fprintf(f_source, "    %s->value.float_val = %s->%s;\n", field_name, s->lower_name, field_name);
         }
         else if (field_type & TYPE_DOUBLE)
         {
             fprintf(f_source, "    %s->type = JACON_VALUE_DOUBLE;\n", field_name);
-            fprintf(f_source, "    %s->value.double_val = %s->%s;\n", field_name, var_name, field_name);
+            fprintf(f_source, "    %s->value.double_val = %s->%s;\n", field_name, s->lower_name, field_name);
         }
         else if (field_type & TYPE_BOOL)
         {
             fprintf(f_source, "    %s->type = JACON_VALUE_BOOLEAN;\n", field_name);
-            fprintf(f_source, "    %s->value.bool_val = %s->%s;\n", field_name, var_name, field_name);
+            fprintf(f_source, "    %s->value.bool_val = %s->%s;\n", field_name, s->lower_name, field_name);
         }
         fprintf(f_source, "    Jacon_append_child(node, %s);\n", field_name);
     }
@@ -175,38 +196,32 @@ int setup_read(ParsedStruct *s, FILE* f_header, FILE* f_source)
 {
     LOG(INFO, "Generating read function for struct: %s", s->name);
 
-    char var_name[64];
-    sprintf(var_name, "var_%s", s->name);
-
-    fprintf(f_header, "void read_%s(Jacon_content *db, %s *%s, const char *%s_key);\n\n", s->name, s->name, var_name, s->name);
-    fprintf(f_source, "void read_%s(Jacon_content *db, %s *%s, const char *%s_key)\n{\n", s->name, s->name, var_name, s->name);
-    fprintf(f_source, "    char key[128];\n");
+    fprintf(f_header, "void read_%s(Jacon_content *db, %s *%s, const char *key);\n\n", s->lower_name, s->name, s->lower_name);
+    fprintf(f_source, "void read_%s(Jacon_content *db, %s *%s, const char *key)\n{\n", s->lower_name, s->name, s->lower_name);
 
     for (size_t i = 0; i < s->field_count; i++)
     {
         char *field_name = s->fields[i]->name;
-        int field_type = s->fields[i]->type;       
-        // TODO: Introduce a tmp string making method to avoid using the next line for every fields
-        fprintf(f_source, "    sprintf(key, \"%%s.%s\", %s_key);\n", field_name, s->name);
+        int field_type = s->fields[i]->type;    
         if (field_type & TYPE_CHAR && field_type & TYPE_POINTER)
         {
-            fprintf(f_source, "    Jacon_get_string_by_name(db, key, &%s->%s);\n", var_name, field_name);
+            fprintf(f_source, "    Jacon_get_string_by_name(db, Jacon_tmp_str(\"%%s.%s\", key), &%s->%s);\n", field_name, s->lower_name, field_name);
         }
         else if (field_type & TYPE_INT)
         {
-            fprintf(f_source, "    Jacon_get_int_by_name(db, key, &%s->%s);\n", var_name, field_name);
+            fprintf(f_source, "    Jacon_get_int_by_name(db, Jacon_tmp_str(\"%%s.%s\", key), &%s->%s);\n", field_name, s->lower_name, field_name);
         }
         else if (field_type & TYPE_FLOAT)
         {
-            fprintf(f_source, "    Jacon_get_float_by_name(db, key, &%s->%s);\n", var_name, field_name);
+            fprintf(f_source, "    Jacon_get_float_by_name(db, Jacon_tmp_str(\"%%s.%s\", key), &%s->%s);\n", field_name, s->lower_name, field_name);
         }
         else if (field_type & TYPE_DOUBLE)
         {
-            fprintf(f_source, "    Jacon_get_double_by_name(db, key, &%s->%s);\n", var_name, field_name);
+            fprintf(f_source, "    Jacon_get_double_by_name(db, Jacon_tmp_str(\"%%s.%s\", key), &%s->%s);\n", field_name, s->lower_name, field_name);
         }
         else if (field_type & TYPE_BOOL)
         {
-            fprintf(f_source, "    Jacon_get_bool_by_name(db, key, &%s->%s);\n", var_name, field_name);
+            fprintf(f_source, "    Jacon_get_bool_by_name(db, Jacon_tmp_str(\"%%s.%s\", key), &%s->%s);\n", field_name, s->lower_name, field_name);
         }
     }
 
@@ -218,13 +233,10 @@ int setup_create(ParsedStruct *s, FILE* f_header, FILE* f_source)
 {
     LOG(INFO, "Generating create function for struct: %s", s->name);
 
-    char var_name[64];
-    sprintf(var_name, "var_%s", s->name);
+    fprintf(f_header, "void create_%s(Jacon_content *db, %s *%s, const char *key);\n\n", s->lower_name, s->name, s->lower_name);
+    fprintf(f_source, "void create_%s(Jacon_content *db, %s *%s, const char *key)\n{\n", s->lower_name, s->name, s->lower_name);
 
-    fprintf(f_header, "void create_%s(Jacon_content *db, %s *%s, const char *%s_key);\n\n", s->name, s->name, var_name, s->name);
-    fprintf(f_source, "void create_%s(Jacon_content *db, %s *%s, const char *%s_key)\n{\n", s->name, s->name, var_name, s->name);
-
-    fprintf(f_source, "    Jacon_Node *node = create_%s_node(%s, %s_key);\n", s->name, var_name, s->name);
+    fprintf(f_source, "    Jacon_Node *node = create_%s_node(%s, key);\n", s->lower_name, s->lower_name);
 
     fprintf(f_source, "    Jacon_append_child(db->root, node);\n");
     fprintf(f_source, "    Jacon_add_node_to_map(&db->entries, node, NULL);\n}\n\n");
@@ -235,11 +247,8 @@ int setup_update(ParsedStruct *s, FILE* f_header, FILE* f_source)
 {
     LOG(INFO, "Generating update function for struct: %s", s->name);
 
-    char var_name[64];
-    sprintf(var_name, "var_%s", s->name);
-
-    fprintf(f_header, "void update_%s(Jacon_content *db, %s *%s, const char *%s_key);\n\n", s->name, s->name, var_name, s->name);
-    fprintf(f_source, "void update_%s(Jacon_content *db, %s *%s, const char *%s_key)\n{\n", s->name, s->name, var_name, s->name);
+    fprintf(f_header, "void update_%s(Jacon_content *db, %s *%s, const char *key);\n\n", s->lower_name, s->name, s->lower_name);
+    fprintf(f_source, "void update_%s(Jacon_content *db, %s *%s, const char *key)\n{\n", s->lower_name, s->name, s->lower_name);
 
     // Working with json, we do not need to care about SQL keys relations (PK,FK).
     // With SQL it would be needed to overwrite existing data, here delete and create is fine.
@@ -250,34 +259,8 @@ int setup_update(ParsedStruct *s, FILE* f_header, FILE* f_source)
     //       Either have the storage defined at compile time or leave the
     //       choice to the user to define and use multiple ones at runtime.
 
-    // TODO:
-    // We do not need to delete the keys from the map as they will be overwritten
-    // Introduce another method to only remove node from root's childs and put another at its location
-    // This skips useless steps of removing from map - better perfs
-
-    // fprintf(f_source, "    %s old = {0};\n", s->name);
-    // fprintf(f_source, "    read_%s(db, &old, %s_key);\n", s->name, s->name);
-    // for (size_t i = 0; i < s->field_count; i++)
-    // {
-    //     char *field_name = s->fields[i]->name;
-    //     int field_type = s->fields[i]->type;       
-    //     if (field_type & TYPE_CHAR && field_type & TYPE_POINTER)
-    //     {
-    //         fprintf(f_source, "    if (%s->%s && strcmp(old.%s, %s->%s) != 0)\n", var_name, field_name, field_name, var_name, field_name);
-    //         fprintf(f_source, "    {\n");
-    //         fprintf(f_source, "        free(old.%s);\n", field_name);
-    //         fprintf(f_source, "        old.%s = strdup(%s->%s);\n", field_name, var_name, field_name);
-    //         fprintf(f_source, "    }\n");
-    //     }
-    //     else
-    //     {
-    //         fprintf(f_source, "    if (old.%s != %s->%s)\n", field_name, var_name, field_name);
-    //         fprintf(f_source, "        old.%s = %s->%s;\n", field_name, var_name, field_name);
-    //     }
-    // }
-
-    fprintf(f_source, "    Jacon_Node *new = create_%s_node(%s, %s_key);\n", s->name, var_name, s->name);
-    fprintf(f_source, "    Jacon_replace_child(db->root, %s_key, new);\n", s->name);
+    fprintf(f_source, "    Jacon_Node *new = create_%s_node(%s, key);\n", s->lower_name, s->lower_name);
+    fprintf(f_source, "    Jacon_replace_child(db->root, key, new);\n");
     fprintf(f_source, "    Jacon_add_node_to_map(&db->entries, new, NULL);\n");
 
     fprintf(f_source, "}\n\n");
@@ -288,18 +271,15 @@ int setup_delete(ParsedStruct *s, FILE* f_header, FILE* f_source)
 {
     LOG(INFO, "Generating delete function for struct: %s", s->name);
 
-    fprintf(f_header, "void delete_%s(Jacon_content *db, const char *%s_key);\n\n", s->name, s->name);
-    fprintf(f_source, "void delete_%s(Jacon_content *db, const char *%s_key)\n{\n", s->name, s->name);
+    fprintf(f_header, "void delete_%s(Jacon_content *db, const char *key);\n\n", s->lower_name);
+    fprintf(f_source, "void delete_%s(Jacon_content *db, const char *key)\n{\n", s->lower_name);
 
-    fprintf(f_source, "    char key[128];\n");
     for (size_t i = 0; i < s->field_count; i++)
     {
         char *field_name = s->fields[i]->name;
-        // TODO: Introduce a tmp string making method to avoid using the next line for every fields
-        fprintf(f_source, "    sprintf(key, \"%%s.%s\", %s_key);\n", field_name, s->name);
-        fprintf(f_source, "    Jacon_free_node(Jacon_hm_remove(&db->entries, key));\n");
+        fprintf(f_source, "    Jacon_free_node(Jacon_hm_remove(&db->entries, Jacon_tmp_str(\"%%s.%s\", key)));\n", field_name);
     }
-    fprintf(f_source, "    Jacon_remove_child_by_name(db->root, %s_key);\n", s->name);
+    fprintf(f_source, "    Jacon_remove_child_by_name(db->root, key);\n");
 
     fprintf(f_source, "}\n\n");
     return 0;
@@ -309,11 +289,8 @@ int setup_free(ParsedStruct *s, FILE* f_header, FILE* f_source)
 {
     LOG(INFO, "Generating free function for struct: %s", s->name);
 
-    char var_name[64];
-    sprintf(var_name, "var_%s", s->name);
-
-    fprintf(f_header, "void free_%s(%s *%s);\n\n", s->name, s->name, var_name);
-    fprintf(f_source, "void free_%s(%s *%s)\n{\n", s->name, s->name, var_name);
+    fprintf(f_header, "void free_%s(%s *%s);\n\n", s->lower_name, s->name, s->lower_name);
+    fprintf(f_source, "void free_%s(%s *%s)\n{\n", s->lower_name, s->name, s->lower_name);
 
     for (size_t i = 0; i < s->field_count; i++)
     {
@@ -322,7 +299,7 @@ int setup_free(ParsedStruct *s, FILE* f_header, FILE* f_source)
 
         if (field_type & TYPE_POINTER)
         {
-            fprintf(f_source, "    free(%s->%s);\n", var_name, field_name);
+            fprintf(f_source, "    free(%s->%s);\n", s->lower_name, field_name);
         }
     }
 
@@ -330,10 +307,65 @@ int setup_free(ParsedStruct *s, FILE* f_header, FILE* f_source)
     return 0;
 }
 
-int corm_setup(const char *input_path)
+int setup_print(ParsedStruct *s, FILE* f_header, FILE* f_source)
 {
+    LOG(INFO, "Generating debug print function for struct: %s", s->name);
+
+    fprintf(f_header, "#define print_%s(%s) (print_%s_(%s, #%s))\n", s->lower_name, s->lower_name, s->lower_name, s->lower_name, s->lower_name);
+    fprintf(f_header, "void print_%s_(%s %s, const char *name);\n\n", s->lower_name, s->name, s->lower_name);
+    fprintf(f_source, "void print_%s_(%s %s, const char *name)\n{\n", s->lower_name, s->name, s->lower_name);
+
+
+    fprintf(f_source, "    printf(\"[DEBUG] Printing %%s\\n\", name);\n");
+    for (size_t i = 0; i < s->field_count; i++)
+    {
+        char *field_name = s->fields[i]->name;
+        int field_type = s->fields[i]->type;
+        if (field_type & TYPE_CHAR && field_type & TYPE_POINTER)
+        {
+            fprintf(f_source, "    printf(\"    %-15s: %%s\\n\", %s.%s);\n", field_name, s->lower_name, field_name);
+        }
+        else if (field_type & TYPE_INT)
+        {
+            fprintf(f_source, "    printf(\"    %-15s: %%d\\n\", %s.%s);\n", field_name, s->lower_name, field_name);
+        }
+        else if (field_type & TYPE_FLOAT)
+        {
+            fprintf(f_source, "    printf(\"    %-15s: %%f\\n\", %s.%s);\n", field_name, s->lower_name, field_name);
+        }
+        else if (field_type & TYPE_DOUBLE)
+        {
+            fprintf(f_source, "    printf(\"    %-15s: %%f\\n\", %s.%s);\n", field_name, s->lower_name, field_name);
+        }
+        else if (field_type & TYPE_BOOL)
+        {
+            fprintf(f_source, "    printf(\"    %-15s: %%s\\n\", %s.%s ? \"true\" : \"false\");\n", field_name, s->lower_name, field_name);
+        }
+    }
+
+    fprintf(f_source, "}\n\n");
+    return 0;
+}
+
+int corm_setup_(CormContext context)
+{
+    int err = 0;
+    if (!context.input_header)
+    {
+        LOG(ERROR, "Please provide a file to parse in 'context.input_header'");
+        err = 1;
+    }
+    if (!context.crud)
+    {
+        LOG(ERROR, "Please set 'context.crud' according to the wanted functions");
+        err = 1;
+    }
+    if (err) return 1;
+
+    if (!context.output_path) context.output_path = "./";
+
     LOG(INFO, "Starting corm setup");
-    FILE *f = fopen(input_path, "rb");
+    FILE *f = fopen(context.input_header, "rb");
     if (!f) return 1;
 
     size_t file_size = 0;
@@ -346,30 +378,43 @@ int corm_setup(const char *input_path)
 
     ParsedStruct s = {0};
     parse_struct(&s, file_content, file_size);
-
-    // TODO: Rename those files with the struct's name to avoid overwriting if we have multiple structs.
-    FILE* f_header = fopen("example/corm_generated.h", "wb");
-    if (!f_header) return 1;
-    FILE* f_source = fopen("example/corm_generated.c", "wb");
-    if (!f_source) return 1;
-
-    fprintf(f_header, "#ifndef CORM_GENERATED_H\n#define CORM_GENERATED_H\n\n");
-    // TODO: Detect custom types to include correct files.
-    // Lazy workaround, leave the responsability to give the header files to the user
-    // by letting him include them in its .h file so we can get them.
-    fprintf(f_header, "#include <stddef.h>\n#include <stdbool.h>\n#include \"../Jacon/jacon.h\"\n\n");
-    fprintf(f_header, "%s\n\n", file_content);
-    fprintf(f_source, "#include \"corm_generated.h\"\n#include <stdio.h>\n#include <stdlib.h>\n\n");
-
-    setup_create_data_node(&s, f_source); // Tied to create/update operations
-    // TODO: Leave the choice to setup these to the user ?
-    setup_read(&s, f_header, f_source);
-    setup_create(&s, f_header, f_source);
-    setup_update(&s, f_header, f_source);
-    setup_delete(&s, f_header, f_source);
-    setup_free(&s, f_header, f_source);
     
-    fprintf(f_header, "#endif // CORM_GENERATED_H");
+    FILE* f_header = fopen(tmp_str("%scorm_%s.h", context.output_path, s.lower_name), "wb");
+    if (!f_header) return 1;
+    FILE* f_source = fopen(tmp_str("%scorm_%s.c", context.output_path, s.lower_name), "wb");
+    if (!f_source) return 1;
+    
+    fprintf(f_header, "#ifndef CORM_%s_H\n#define CORM_%s_H\n\n", s.lower_name, s.lower_name);
+    fprintf(f_header, "#include \"../Jacon/jacon.h\"\n");
+    fprintf(f_header, "%s\n\n", file_content);
+    fprintf(f_source, "#include \"corm_%s.h\"\n#include <stdio.h>\n#include <stdlib.h>\n\n", s.lower_name);
+    
+    
+    if (context.crud & READ)
+    {
+        setup_read(&s, f_header, f_source);
+    }
+    if (context.crud & CREATE || context.crud & UPDATE)
+    {
+        setup_create_data_node(&s, f_source);
+        setup_create(&s, f_header, f_source);
+        setup_update(&s, f_header, f_source);
+    }
+    if (context.crud & DELETE)
+    {
+        setup_delete(&s, f_header, f_source);
+    }
+    if (context.crud & CREATE || context.crud & UPDATE)
+    {
+        setup_free(&s, f_header, f_source);
+    }
+    
+    if (context.options & DEBUG)
+    {
+        setup_print(&s, f_header, f_source);
+    }
+    
+    fprintf(f_header, "#endif // CORM_%s_H", s.lower_name);
 
     fclose(f_header);
     fclose(f_source);
