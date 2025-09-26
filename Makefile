@@ -1,8 +1,8 @@
 .PHONY: example
-example: example/setup.c corm_setup.c example/example.c
+example: example/setup.c corm_setup.c example/example.c corm.c
 	gcc -ggdb -o example/setup example/setup.c corm_setup.c
 	./example/setup
-	gcc -ggdb -o example/example example/example.c example/corm_user.c -L./Jacon -ljacon
+	gcc -ggdb -o example/example example/example.c corm.c example/corm_user.c -L./Jacon -ljacon
 
 clean:
 	rm -f example/setup example/example example/corm_user.c example/corm_user.h

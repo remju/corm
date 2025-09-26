@@ -1,31 +1,19 @@
+#include "../corm.h"
 #include "corm_user.h"
-#include "../Jacon/jacon.h"
 #include <stdio.h>
 #include <stdlib.h>
-
-#define str_bool(bool) (bool ? "true" : "false")
-#define DB_PATH "example/users.json"
-
-char* read_file(FILE *file, size_t *file_size);
-int save_db(const char *db_path, Jacon_content *json_db);
 
 int main(void)
 {
     // Setup the database
-    size_t file_size = 0;
-    FILE* f = fopen(DB_PATH, "rb");
-    char *raw_json = read_file(f, &file_size);
-    Jacon_content json_db = {0};
-    Jacon_init_content(&json_db);
-    Jacon_deserialize(&json_db, raw_json);
-    free(raw_json);
-    fclose(f);
+    CormDatabase db = {0};
+    corm_init_json_db(&db, "example/users.json");
 
     // Read one user
     {
         User first_user = {0};
         char *user_id = "1";
-        read_user(&json_db, &first_user, user_id);
+        read_user(&db, &first_user, user_id);
         print_user(first_user);
         free_user(&first_user);
     }
@@ -39,60 +27,32 @@ int main(void)
             .height = 86.4,
             .married = false
         };
-        create_user(&json_db, &new_user, "3");
+        create_user(&db, &new_user, "3");
     }
 
     // Update a user
     {
         User updated_user = {0};
         char *user_id = "2";
-        read_user(&json_db, &updated_user, user_id);
+        read_user(&db, &updated_user, user_id);
         free(updated_user.password);
         updated_user.password = "updatedpassword"; // Memory leak if no free before replacing
-        update_user(&json_db, &updated_user, user_id);
+        update_user(&db, &updated_user, user_id);
         free(updated_user.login);
 
         User second_user = {0};
-        read_user(&json_db, &second_user, user_id);
+        read_user(&db, &second_user, user_id);
         print_user(second_user);
         free_user(&second_user);
     }
     
     // Delete a user
-    delete_user(&json_db, "1");
-
-    // Fast way to look at json without touching db file
-    // puts(Jacon_serialize(json_db.root));
-    
-    // Save the db to json file to keep modifications
-    // save_db(DB_PATH, &json_db);
+    delete_user(&db, "1");
+  
+    // Commit changes, changes are sent to real db
+    // corm_commit(&db);
 
     // Free database ressources
-    Jacon_free_content(&json_db);
-    return 0;
-}
-
-char* read_file(FILE *file, size_t *file_size)
-{
-    if (fseek(file, 0, SEEK_END) < 0) return NULL;
-    *file_size = ftell(file);
-    if (*file_size < 0) return NULL;
-    if (fseek(file, 0, SEEK_SET) < 0) return NULL;
-    
-    (*file_size)++; // Extra null byte
-    char *file_content = calloc(*file_size, 1);
-    if(file_content == NULL) return NULL;
-
-    fread(file_content, *file_size, 1, file);
-    return file_content;
-}
-
-int save_db(const char *db_path, Jacon_content *json_db)
-{
-    FILE *f = fopen(DB_PATH, "wb");
-    char *ser_db = Jacon_serialize(json_db->root);
-    fprintf(f, "%s", ser_db);
-    free(ser_db);
-    fclose(f);
+    corm_free_database(&db);
     return 0;
 }
