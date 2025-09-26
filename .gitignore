@@ -1,10 +1,10 @@
-example/corm_setup
+example/setup
 example/example
-example/corm_generated.c
-example/corm_generated.h
+example/corm_*
 main
 *.o
 *.a
 *.so
 .vscode
 .gdb_history
+main.c
