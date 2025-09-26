@@ -147,7 +147,7 @@ int parse_struct(ParsedStruct *s, const char *file_content, size_t file_size)
     return 0;
 }
 
-int setup_create_data_node(ParsedStruct *s, FILE *f_source)
+int setup_json_create_data_node(ParsedStruct *s, FILE *f_source)
 {
     LOG(INFO, "Generating create data node function for struct: %s", s->name);
 
@@ -192,12 +192,12 @@ int setup_create_data_node(ParsedStruct *s, FILE *f_source)
     fprintf(f_source, "    return node;\n}\n\n");
 }
 
-int setup_read(ParsedStruct *s, FILE* f_header, FILE* f_source)
+int setup_json_read(ParsedStruct *s, FILE* f_header, FILE* f_source)
 {
     LOG(INFO, "Generating read function for struct: %s", s->name);
 
-    fprintf(f_header, "void read_%s(Jacon_content *db, %s *%s, const char *key);\n\n", s->lower_name, s->name, s->lower_name);
-    fprintf(f_source, "void read_%s(Jacon_content *db, %s *%s, const char *key)\n{\n", s->lower_name, s->name, s->lower_name);
+    fprintf(f_header, "void read_%s(CormDatabase *db, %s *%s, const char *key);\n\n", s->lower_name, s->name, s->lower_name);
+    fprintf(f_source, "void read_%s(CormDatabase *db, %s *%s, const char *key)\n{\n", s->lower_name, s->name, s->lower_name);
 
     for (size_t i = 0; i < s->field_count; i++)
     {
@@ -205,23 +205,23 @@ int setup_read(ParsedStruct *s, FILE* f_header, FILE* f_source)
         int field_type = s->fields[i]->type;    
         if (field_type & TYPE_CHAR && field_type & TYPE_POINTER)
         {
-            fprintf(f_source, "    Jacon_get_string_by_name(db, Jacon_tmp_str(\"%%s.%s\", key), &%s->%s);\n", field_name, s->lower_name, field_name);
+            fprintf(f_source, "    Jacon_get_string_by_name(&db->json.db, Jacon_tmp_str(\"%%s.%s\", key), &%s->%s);\n", field_name, s->lower_name, field_name);
         }
         else if (field_type & TYPE_INT)
         {
-            fprintf(f_source, "    Jacon_get_int_by_name(db, Jacon_tmp_str(\"%%s.%s\", key), &%s->%s);\n", field_name, s->lower_name, field_name);
+            fprintf(f_source, "    Jacon_get_int_by_name(&db->json.db, Jacon_tmp_str(\"%%s.%s\", key), &%s->%s);\n", field_name, s->lower_name, field_name);
         }
         else if (field_type & TYPE_FLOAT)
         {
-            fprintf(f_source, "    Jacon_get_float_by_name(db, Jacon_tmp_str(\"%%s.%s\", key), &%s->%s);\n", field_name, s->lower_name, field_name);
+            fprintf(f_source, "    Jacon_get_float_by_name(&db->json.db, Jacon_tmp_str(\"%%s.%s\", key), &%s->%s);\n", field_name, s->lower_name, field_name);
         }
         else if (field_type & TYPE_DOUBLE)
         {
-            fprintf(f_source, "    Jacon_get_double_by_name(db, Jacon_tmp_str(\"%%s.%s\", key), &%s->%s);\n", field_name, s->lower_name, field_name);
+            fprintf(f_source, "    Jacon_get_double_by_name(&db->json.db, Jacon_tmp_str(\"%%s.%s\", key), &%s->%s);\n", field_name, s->lower_name, field_name);
         }
         else if (field_type & TYPE_BOOL)
         {
-            fprintf(f_source, "    Jacon_get_bool_by_name(db, Jacon_tmp_str(\"%%s.%s\", key), &%s->%s);\n", field_name, s->lower_name, field_name);
+            fprintf(f_source, "    Jacon_get_bool_by_name(&db->json.db, Jacon_tmp_str(\"%%s.%s\", key), &%s->%s);\n", field_name, s->lower_name, field_name);
         }
     }
 
@@ -229,26 +229,26 @@ int setup_read(ParsedStruct *s, FILE* f_header, FILE* f_source)
     return 0;
 }
 
-int setup_create(ParsedStruct *s, FILE* f_header, FILE* f_source)
+int setup_json_create(ParsedStruct *s, FILE* f_header, FILE* f_source)
 {
     LOG(INFO, "Generating create function for struct: %s", s->name);
 
-    fprintf(f_header, "void create_%s(Jacon_content *db, %s *%s, const char *key);\n\n", s->lower_name, s->name, s->lower_name);
-    fprintf(f_source, "void create_%s(Jacon_content *db, %s *%s, const char *key)\n{\n", s->lower_name, s->name, s->lower_name);
+    fprintf(f_header, "void create_%s(CormDatabase *db, %s *%s, const char *key);\n\n", s->lower_name, s->name, s->lower_name);
+    fprintf(f_source, "void create_%s(CormDatabase *db, %s *%s, const char *key)\n{\n", s->lower_name, s->name, s->lower_name);
 
     fprintf(f_source, "    Jacon_Node *node = create_%s_node(%s, key);\n", s->lower_name, s->lower_name);
 
-    fprintf(f_source, "    Jacon_append_child(db->root, node);\n");
-    fprintf(f_source, "    Jacon_add_node_to_map(&db->entries, node, NULL);\n}\n\n");
+    fprintf(f_source, "    Jacon_append_child(db->json.db.root, node);\n");
+    fprintf(f_source, "    Jacon_add_node_to_map(&db->json.db.entries, node, NULL);\n}\n\n");
     return 0;
 }
 
-int setup_update(ParsedStruct *s, FILE* f_header, FILE* f_source)
+int setup_json_update(ParsedStruct *s, FILE* f_header, FILE* f_source)
 {
     LOG(INFO, "Generating update function for struct: %s", s->name);
 
-    fprintf(f_header, "void update_%s(Jacon_content *db, %s *%s, const char *key);\n\n", s->lower_name, s->name, s->lower_name);
-    fprintf(f_source, "void update_%s(Jacon_content *db, %s *%s, const char *key)\n{\n", s->lower_name, s->name, s->lower_name);
+    fprintf(f_header, "void update_%s(CormDatabase *db, %s *%s, const char *key);\n\n", s->lower_name, s->name, s->lower_name);
+    fprintf(f_source, "void update_%s(CormDatabase *db, %s *%s, const char *key)\n{\n", s->lower_name, s->name, s->lower_name);
 
     // Working with json, we do not need to care about SQL keys relations (PK,FK).
     // With SQL it would be needed to overwrite existing data, here delete and create is fine.
@@ -259,27 +259,28 @@ int setup_update(ParsedStruct *s, FILE* f_header, FILE* f_source)
     //       Either have the storage defined at compile time or leave the
     //       choice to the user to define and use multiple ones at runtime.
 
+    fprintf(f_source, "    Jacon_remove_child_by_name(db->json.db.root, key);\n");
     fprintf(f_source, "    Jacon_Node *new = create_%s_node(%s, key);\n", s->lower_name, s->lower_name);
-    fprintf(f_source, "    Jacon_replace_child(db->root, key, new);\n");
-    fprintf(f_source, "    Jacon_add_node_to_map(&db->entries, new, NULL);\n");
+    fprintf(f_source, "    Jacon_append_child(db->json.db.root, new);\n");
+    fprintf(f_source, "    Jacon_add_node_to_map(&db->json.db.entries, new, NULL);\n");
 
     fprintf(f_source, "}\n\n");
     return 0;
 }
 
-int setup_delete(ParsedStruct *s, FILE* f_header, FILE* f_source)
+int setup_json_delete(ParsedStruct *s, FILE* f_header, FILE* f_source)
 {
     LOG(INFO, "Generating delete function for struct: %s", s->name);
 
-    fprintf(f_header, "void delete_%s(Jacon_content *db, const char *key);\n\n", s->lower_name);
-    fprintf(f_source, "void delete_%s(Jacon_content *db, const char *key)\n{\n", s->lower_name);
+    fprintf(f_header, "void delete_%s(CormDatabase *db, const char *key);\n\n", s->lower_name);
+    fprintf(f_source, "void delete_%s(CormDatabase *db, const char *key)\n{\n", s->lower_name);
 
     for (size_t i = 0; i < s->field_count; i++)
     {
         char *field_name = s->fields[i]->name;
-        fprintf(f_source, "    Jacon_free_node(Jacon_hm_remove(&db->entries, Jacon_tmp_str(\"%%s.%s\", key)));\n", field_name);
+        fprintf(f_source, "    Jacon_free_node(Jacon_hm_remove(&db->json.db.entries, Jacon_tmp_str(\"%%s.%s\", key)));\n", field_name);
     }
-    fprintf(f_source, "    Jacon_remove_child_by_name(db->root, key);\n");
+    fprintf(f_source, "    Jacon_remove_child_by_name(db->json.db.root, key);\n");
 
     fprintf(f_source, "}\n\n");
     return 0;
@@ -347,7 +348,25 @@ int setup_print(ParsedStruct *s, FILE* f_header, FILE* f_source)
     return 0;
 }
 
-int corm_setup_(CormContext context)
+int setup_for_json_db(CormContext context, ParsedStruct *s, FILE* f_header, FILE* f_source)
+{
+    if (context.crud & READ)
+    {
+        setup_json_read(s, f_header, f_source);
+    }
+    if (context.crud & CREATE || context.crud & UPDATE)
+    {
+        setup_json_create_data_node(s, f_source);
+        setup_json_create(s, f_header, f_source);
+        setup_json_update(s, f_header, f_source);
+    }
+    if (context.crud & DELETE)
+    {
+        setup_json_delete(s, f_header, f_source);
+    }
+}
+
+int corm_setup(CormContext context)
 {
     int err = 0;
     if (!context.input_header)
@@ -358,6 +377,11 @@ int corm_setup_(CormContext context)
     if (!context.crud)
     {
         LOG(ERROR, "Please set 'context.crud' according to the wanted functions");
+        err = 1;
+    }
+    if (!context.db_type)
+    {
+        LOG(ERROR, "Please set 'context.db_type' according to your type of database");
         err = 1;
     }
     if (err) return 1;
@@ -387,28 +411,15 @@ int corm_setup_(CormContext context)
     fprintf(f_header, "#ifndef CORM_%s_H\n#define CORM_%s_H\n\n", s.lower_name, s.lower_name);
     fprintf(f_header, "#include \"../Jacon/jacon.h\"\n");
     fprintf(f_header, "%s\n\n", file_content);
-    fprintf(f_source, "#include \"corm_%s.h\"\n#include <stdio.h>\n#include <stdlib.h>\n\n", s.lower_name);
+    fprintf(f_source, "#include \"../corm.h\"\n#include \"corm_%s.h\"\n#include <stdio.h>\n#include <stdlib.h>\n\n", s.lower_name);
     
-    
-    if (context.crud & READ)
+    switch (context.db_type)
     {
-        setup_read(&s, f_header, f_source);
+    case JSON_DATABASE:
+        setup_for_json_db(context, &s, f_header, f_source);
+        break;
     }
-    if (context.crud & CREATE || context.crud & UPDATE)
-    {
-        setup_create_data_node(&s, f_source);
-        setup_create(&s, f_header, f_source);
-        setup_update(&s, f_header, f_source);
-    }
-    if (context.crud & DELETE)
-    {
-        setup_delete(&s, f_header, f_source);
-    }
-    if (context.crud & CREATE || context.crud & UPDATE)
-    {
-        setup_free(&s, f_header, f_source);
-    }
-    
+    setup_free(&s, f_header, f_source);
     if (context.options & DEBUG)
     {
         setup_print(&s, f_header, f_source);

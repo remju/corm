@@ -1,6 +1,8 @@
 #ifndef CORM_SETUP_H
 #define CORM_SETUP_H
 
+#include "corm.h"
+
 #define DEBUG           0x01
 
 #define CREATE          0x01
@@ -16,9 +18,10 @@ typedef struct {
     char *output_path;
     int options;
     int crud;
+    int db_type;
 } CormContext;
 
-#define corm_setup(...) (corm_setup_((CormContext) { __VA_ARGS__ }))
-int corm_setup_(CormContext context);
+#define corm_setup_(...) (corm_setup((CormContext) { __VA_ARGS__ }))
+int corm_setup(CormContext context);
 
 #endif // CORM_SETUP_H
