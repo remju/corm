@@ -7,7 +7,8 @@ int main(void)
 {
     CormContext context = {
         // Header file to be parsed
-        .input_header = "example/user.h", 
+        .input_header = "example/user.h",
+        // Output path or generated files
         .output_path = "example/",  
         // CRUD functions to include (CREATE, READ, UPDATE, DELETE, CRUD for all)
         .crud = CRUD,                       
