@@ -1,10 +1,4 @@
-example/setup
-example/example
-example/corm_*
-main
-*.o
-*.a
-*.so
+build/
 .vscode
 .gdb_history
-main.c
+*.db

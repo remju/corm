@@ -1,13 +1,12 @@
-#include "../corm.h"
+#include "corm.h"
 #include "corm_user.h"
-#include <stdio.h>
 #include <stdlib.h>
 
 int main(void)
 {
     // Setup the database
     CormDatabase db = {0};
-    corm_init_json_db(&db, "example/users.json");
+    if (corm_init_json_db(&db, "examples/json/users.json")) return 1;
 
     // Read one user
     {

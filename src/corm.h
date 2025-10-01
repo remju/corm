@@ -1,11 +1,12 @@
 #ifndef CORM_H
 #define CORM_H
 
-#include "Jacon/jacon.h"
+#include "jacon.h"
 
 enum DatabaseTypes
 {
     JSON_DATABASE = 1,
+    SQLITE_DATABASE,
     // More to come
 };
 

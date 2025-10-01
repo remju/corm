@@ -34,15 +34,15 @@ Create a setup program to generate the ORM functions:
 
 ```c
 // setup.c
-#include "corm_setup.h"
+#include "src/corm_setup.h"
 
 int main(void)
 {
     CormContext context = {
         // Header file to be parsed
-        .input_header = "example/user.h",
+        .input_header = "user.h",
         // Output path or generated files
-        .output_path = "example/",  
+        .output_path = "./",  
         // CRUD functions to include (CREATE, READ, UPDATE, DELETE, CRUD for all)
         .crud = CRUD,                       
         // Include debug functions (print_*, ...)
@@ -57,7 +57,7 @@ int main(void)
 
 Compile and run the setup:
 ```bash
-gcc -o setup setup.c corm_setup.c
+gcc -o setup setup.c src/corm_setup*.c src/jacon.c
 ./setup
 ```
 
@@ -65,7 +65,7 @@ gcc -o setup setup.c corm_setup.c
 
 ```c
 // main.c
-#include "corm.h"
+#include "src/corm.h"
 #include "corm_user.h"  // Generated file
 
 int main(void) {
@@ -105,6 +105,12 @@ int main(void) {
 }
 ```
 
+Compile and run the main program:
+```bash
+gcc -Isrc -o main main.c src/corm.c src/jacon.c corm_user.c
+./main
+```
+
 ## Building
 
 ### Prerequisites
@@ -112,15 +118,23 @@ int main(void) {
 - GCC compiler
 - Make
 
-### Build Example
+### Build Examples
 
+#### JSON Example
 ```bash
-make example
+make jsonex
 ```
 
 This will:
-1. Build and run the setup program to generate CRUD functions
-2. Compile the example program with the generated code
+1. Build the CORM library and setup objects
+2. Build and run the JSON setup program to generate CRUD functions
+3. Compile the JSON example program with the generated code
+
+#### Available Make Targets
+- `make static` - Build static library (`libcorm.a`)
+- `make shared` - Build shared library (`libcorm.so`)
+- `make jsonex` - Build and run JSON example
+- `make clean` - Clean build artifacts
 
 ## Generated Functions
 
@@ -177,28 +191,10 @@ CORM currently supports JSON file databases. Data is stored in JSON format:
 ### Database Types
 - `JSON_DATABASE` - JSON file database support
 
-## Project Structure
-
-```
-corm/
-├── corm.h              # Main CORM header
-├── corm.c              # Core CORM implementation
-├── corm_setup.h        # Setup/code generation header
-├── corm_setup.c        # Setup/code generation implementation
-├── stb_c_lexer.h       # C lexer for parsing headers
-├── Jacon/              # JSON parsing library
-├── example/            # Example usage
-│   ├── user.h          # Example struct definition
-│   ├── setup.c         # Setup program
-│   ├── example.c       # Example usage
-│   └── users.json      # Example JSON database
-└── Makefile
-```
-
 ## Dependencies
 
-- [Jacon](https://github.com/remju/Jacon): JSON parsing library (included as subproject)
-- [stb_c_lexer](https://github.com/nothings/stb/blob/master/stb_c_lexer.h): C lexer for parsing header files (included)
+- [Jacon](https://github.com/remju/Jacon): JSON parsing library (integrated into `src/`)
+- [stb_c_lexer](https://github.com/nothings/stb/blob/master/stb_c_lexer.h): C lexer for parsing header files (included in `src/`)
 
 ## License
 

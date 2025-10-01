@@ -11,14 +11,16 @@
 #define DELETE          0x08
 #define CRUD            (CREATE|READ|UPDATE|DELETE)
 
-#define TMP_STR_SIZE    1024
-
 typedef struct {
     char *input_header;
     char *output_path;
     int options;
     int crud;
     int db_type;
+    
+    // Internal, do not touch
+    char *input_file_content;
+    size_t input_file_size;
 } CormContext;
 
 #define corm_setup_(...) (corm_setup((CormContext) { __VA_ARGS__ }))
